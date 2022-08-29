@@ -21,11 +21,14 @@ from collections import Counter
 
 from household import Household
 
+import matplotlib.pyplot as plt
+
 
 class EnergyModel(Model):
     """Model class for the energy model. """
 
     def __init__(self, n_households=10000, decision_making_model="TPB",
+                 opinion_dynamics=True,
                  random_seed=12345678):
         """Initialization of the energy model.
 
@@ -59,36 +62,44 @@ class EnergyModel(Model):
 
         # -- Initialize households -- #
         self.decision_making_model = decision_making_model
+        self.opinion_dynamics = opinion_dynamics
         if self.decision_making_model == "TPB":
             # Generate weight distribution for TPB utility function weights
             TPB_weights = self.generate_TPB_weights(n_households)
             # Add households to model
             for n in range(n_households):
                 self.add_household(TPB_weights[n])
+            # Assign social network connections for each household
+            for hh in self.schedule._agents.values():
+                hh.neighbors = [self.schedule._agents[hh_id] for hh_id
+                                in self.G.neighbors(hh.unique_id)]
+                if self.opinion_dynamics:
+                    # Initialize influence weights for opinion dynamics
+                    weights = np.random.uniform(0, 1, len(hh.neighbors))
+                    weights = weights / weights.sum()
+                    hh.influence_weights = {neighbor: weight for neighbor, weight
+                                            in zip(hh.neighbors, weights)}
+                    # Initialize influence rate for opinion dynamics
+                    self.influence_rate = 0.1
+
         elif self.decision_making_model == "Rational":
             # Add households to model
             for n in range(n_households):
                 self.add_household()
-        # Assign social network connections for each household
-        for hh in self.schedule._agents.values():
-            hh.neighbors = [self.schedule._agents[hh_id] for hh_id
-                              in self.G.neighbors(hh.unique_id)]
 
         # -- Initialize normalization factors -- #
-        self.max_NPV = max(max(hh.NPV) for hh
-                           in self.schedule._agents.values())
-        self.max_CE = max(max(hh.CE_ratio) for hh
-                          in self.schedule._agents.values())
+        self.max_NPV = max(max(hh.NPV) for hh in self.schedule._agents.values())
 
         # -- Initialize ouput collection -- #
         model_reporters = {"Diffusion rate": self.diffusion_rate,
                            "CO2_saved (kilotonne)": self.total_CO2_saved,
                            "PV_investment (Euros)": self.total_PV_investment}
         agent_reporters = {"Income (Euros)": "income",
-                           # "Attitude": lambda hh: hh.TPB_attributes["PV"][0],
                            "PV_installed": "PV_installed",
                            "PV_investment (Euros)": lambda hh: hh.PV_costs if hh.PV_installed else 0,
                            "CO2_saved (kg)": "CO2_saved"}
+        if self.decision_making_model == "TPB":
+            agent_reporters["Attitude"] = lambda hh: hh.TPB_attributes["PV"][0]
         self.datacollector = DataCollector(model_reporters=model_reporters,
                                            agent_reporters=agent_reporters)
         self.datacollector.collect(self)
@@ -160,5 +171,14 @@ class EnergyModel(Model):
 
     def step(self):
         """Describes a single model step. """
+
+        # Get all household attitude values to enable synchronous updating
+        if self.decision_making_model == "TPB":
+            self.hh_attitudes = {hh.unique_id: hh.TPB_attributes["PV"][0] for
+                                 hh in self.schedule._agents.values()}
+
+        # Model step
         self.schedule.step()
         self.datacollector.collect(self)
+
+            

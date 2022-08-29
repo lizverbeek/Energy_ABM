@@ -16,21 +16,24 @@ import pandas as pd
 from model import EnergyModel
 
 # -- HYPERPARAMETERS -- #
-steps = 50
-# random_seeds = [0]
-random_seeds = np.linspace(0, 10e6, 10, dtype="int")
+steps = 20
+runs = 10
 
 # -- MODEL PARAMETERS -- #
-# TODO: make user input
 n_households = 10000
-decision_making_model = "Rational"  # "Rational" or "TPB"
+decision_making_model = "TPB"  # "Rational" or "TPB"
+opinion_dynamics = True
 
+random_seeds = np.linspace(0, 10e6, runs, dtype="int")
 for i, random_seed in enumerate(random_seeds):
     print("Run num", i, "with random seed", random_seed)
     print("Number of households:", n_households)
     
     tic = time.time()
-    model = EnergyModel(n_households, decision_making_model, random_seed)
+    model = EnergyModel(n_households,
+                        decision_making_model,
+                        opinion_dynamics,
+                        random_seed)
 
     for j in range(steps):
         print("# ------------ Step", j+1, "------------ #")
