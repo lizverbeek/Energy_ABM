@@ -13,12 +13,6 @@ import numpy as np
 
 from mesa import Agent
 
-# TODO: find best solution for this (also apply to CRAB model)
-# Regulate stochasticity
-random_seed = 12345678
-rng_init_hh = np.random.default_rng(random_seed)
-rng_TPB = np.random.default_rng(random_seed)
-
 
 class Household(Agent):
     """Household class representing a household agent in the energy model."""
@@ -34,9 +28,9 @@ class Household(Agent):
         super().__init__(model.next_id(), model)
 
         # -- GENERAL ATTRIBUTES -- #
-        self.income = rng_init_hh.normal(47052, 25232)
+        self.income = self.model.rng.normal(47052, 25232)
         while self.income < 3264:  # Lower bound = 3264 (unemployment subsidy)
-            self.income = rng_init_hh.normal(47052, 25232)
+            self.income = self.model.rng.normal(47052, 25232)
         self.savings = 0
         
         # -- DECISION MAKING ATTRIBUTES -- #
@@ -44,14 +38,14 @@ class Household(Agent):
             # Initialize weights for TPB based on population shares
             self.TPB_weights = TPB_weights
             # Initialize TPB attribute values as vector [Att, SN, PBC]
-            attitude = rng_init_hh.normal(0.2004, 0.4580)
+            attitude = self.model.rng_TPB.normal(0.2004, 0.4580)
             self.TPB_attributes = {"PV": [attitude, 0, 0],
                                    "no_PV": [-attitude, 0, 0]}
 
         # -- ENERGY-RELATED ATTRIBUTES -- #
-        self.energy_use = rng_init_hh.normal(2770, 1553)
+        self.energy_use = self.model.rng.normal(2770, 1553)
         while self.energy_use < 0:  # Lower bound = 0 on energy use
-            self.energy_use = rng_init_hh.normal(2770, 1553)
+            self.energy_use = self.model.rng.normal(2770, 1553)
 
         self.number_of_PVs = np.ceil(self.energy_use/(0.9 * 370))
         self.PV_costs = 1484 + 428 * self.number_of_PVs
@@ -80,19 +74,6 @@ class Household(Agent):
 
         return NPV_PV, NPV_no_PV
 
-    # --- !! REMOVED FROM MODEL -- #
-    # def estimate_CE(self):
-    #     """Return cost effectiveness ratio of installing/not installing PVs."""
-
-    #     # Get yearly benefits, assuming fixed energy use and price
-    #     benefits_PV = sum((self.model.energy_cost[0] +
-    #                        self.model.energy_cost[1] * self.energy_use) /
-    #                       self.model.discount_rates)
-    #     CE_PV = benefits_PV/self.PV_costs
-    #     CE_no_PV = self.PV_costs/benefits_PV
-
-    #     return CE_PV, CE_no_PV
-
     def TPB(self):
         """Household decision-making module: Theory of Planned Behavior. """
 
@@ -119,6 +100,7 @@ class Household(Agent):
         # Opinion dynamics: update household attitude
         if (self.model.decision_making_model == "TPB"
                 and self.model.opinion_dynamics):
+            # Query attitudes of neighbors from model to do synchronous updating
             attitudes_others = np.array([self.model.hh_attitudes[hh.unique_id]
                                          for hh in self.neighbors])
             weights = [self.influence_weights[hh] for hh in self.neighbors]
@@ -128,8 +110,8 @@ class Household(Agent):
             self.TPB_attributes["no_PV"][0] = -self.TPB_attributes["PV"][0]
 
         # -- HOUSEHOLD DECISION MAKING -- #
-        if self.savings > self.PV_costs:  # Income threshold
-            if not self.PV_installed:
+        if not self.PV_installed:
+            if self.savings > self.PV_costs:  # Income threshold
                 if self.model.decision_making_model == "Rational":
                     U_PV, U_no_PV = self.NPV / self.model.max_NPV
                 elif self.model.decision_making_model == "TPB":
@@ -137,8 +119,10 @@ class Household(Agent):
 
                 # Compare utilities to decide on PV installation
                 if U_PV > U_no_PV:
-                    self.PV_installed = True
-                    self.savings -= self.PV_costs
+                    # Intention-behavior barrier:
+                    if self.model.rng.binomial(1, 0.6):
+                        self.PV_installed = True
+                        self.savings -= self.PV_costs
 
         # Keep track of total CO2 saved
         if self.PV_installed:

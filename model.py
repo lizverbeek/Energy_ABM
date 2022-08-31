@@ -9,7 +9,6 @@ TODO: write header comment
 """
 import time
 
-import random
 import numpy as np
 import pandas as pd
 import networkx as nx
@@ -27,9 +26,8 @@ import matplotlib.pyplot as plt
 class EnergyModel(Model):
     """Model class for the energy model. """
 
-    def __init__(self, n_households=10000, decision_making_model="TPB",
-                 opinion_dynamics=True,
-                 random_seed=12345678):
+    def __init__(self, random_seed, n_households, decision_making_model,
+                 opinion_dynamics, influence_rate=0.05):
         """Initialization of the energy model.
 
         Args:
@@ -42,6 +40,9 @@ class EnergyModel(Model):
 
         # -- Regulate stochasticity -- #
         self.random_seed = random_seed
+        self.rng = np.random.default_rng(random_seed)
+        self.rng_TPB = np.random.default_rng(random_seed + 1)
+        self.rng_op_dyn = np.random.default_rng(random_seed + 2)
 
         # -- Model parameters: energy-related --#
         self.PV_lifespan = 25
@@ -54,16 +55,15 @@ class EnergyModel(Model):
         PV_timesteps = np.linspace(0, self.PV_lifespan - 1 , self.PV_lifespan)
         self.discount_rates = (1 + self.interest_rate)**PV_timesteps
 
-        # -- Initialize social network -- #
-        self.G = nx.watts_strogatz_graph(n=n_households, k=7, p=1,
-                                         seed=int(random_seed))
-        # Relabel nodes to be consistent with agent IDs
-        self.G = nx.relabel_nodes(self.G, lambda x: x + 1)
-
         # -- Initialize households -- #
         self.decision_making_model = decision_making_model
         self.opinion_dynamics = opinion_dynamics
         if self.decision_making_model == "TPB":
+            # -- Initialize social network -- #
+            self.G = nx.watts_strogatz_graph(n=n_households, k=7, p=1,
+                                             seed=int(random_seed))
+            # Relabel nodes to be consistent with agent IDs
+            self.G = nx.relabel_nodes(self.G, lambda x: x + 1)
             # Generate weight distribution for TPB utility function weights
             TPB_weights = self.generate_TPB_weights(n_households)
             # Add households to model
@@ -75,12 +75,12 @@ class EnergyModel(Model):
                                 in self.G.neighbors(hh.unique_id)]
                 if self.opinion_dynamics:
                     # Initialize influence weights for opinion dynamics
-                    weights = np.random.uniform(0, 1, len(hh.neighbors))
+                    weights = self.rng_op_dyn.uniform(0, 1, len(hh.neighbors))
                     weights = weights / weights.sum()
                     hh.influence_weights = {neighbor: weight for neighbor, weight
                                             in zip(hh.neighbors, weights)}
                     # Initialize influence rate for opinion dynamics
-                    self.influence_rate = 0.1
+                    self.influence_rate = influence_rate
 
         elif self.decision_making_model == "Rational":
             # Add households to model
@@ -92,12 +92,18 @@ class EnergyModel(Model):
 
         # -- Initialize ouput collection -- #
         model_reporters = {"Diffusion rate": self.diffusion_rate,
-                           "CO2_saved (kilotonne)": self.total_CO2_saved,
-                           "PV_investment (Euros)": self.total_PV_investment}
+                           "CO2_saved (kilotonne)": self.CO2_saved,
+                           "CO2_produced (kilotonne)": self.CO2_produced,
+                           "PV_investment (Euros)": self.total_PV_investment
+                           }
         agent_reporters = {"Income (Euros)": "income",
+                           "Energy use (KwH/Year)": "energy_use",
                            "PV_installed": "PV_installed",
-                           "PV_investment (Euros)": lambda hh: hh.PV_costs if hh.PV_installed else 0,
-                           "CO2_saved (kg)": "CO2_saved"}
+                           "PV_investment (Euros)": lambda hh: (hh.PV_costs
+                                                                if hh.PV_installed
+                                                                else 0),
+                           "CO2_saved (kg)": "CO2_saved"
+                           }
         if self.decision_making_model == "TPB":
             agent_reporters["Attitude"] = lambda hh: hh.TPB_attributes["PV"][0]
         self.datacollector = DataCollector(model_reporters=model_reporters,
@@ -155,12 +161,19 @@ class EnergyModel(Model):
         hh_total = self.schedule.get_agent_count()
         return hh_PV/hh_total
 
-    def total_CO2_saved(self):
-        """Return annual total CO2 savings (in kilotonne per year)."""
-        total_CO2_saved = sum(hh.CO2_saved for hh
-                              in self.schedule._agents.values()
-                              if hh.PV_installed) * 1e-6
-        return total_CO2_saved
+    def CO2_produced(self):
+        """Return total annual CO2 emmission (in kilotonne per year)"""
+        annual_CO2_produced = sum(hh.energy_use * self.CO2_emission
+                                  for hh in self.schedule._agents.values()
+                                  if not hh.PV_installed) * 1e-6
+        return annual_CO2_produced
+
+    def CO2_saved(self):
+        """Return total annual CO2 savings (in kilotonne per year)."""
+        annual_CO2_saved = sum(hh.CO2_saved for hh
+                               in self.schedule._agents.values()
+                               if hh.PV_installed) * 1e-6
+        return annual_CO2_saved
 
     def total_PV_investment(self):
         """ Return total amount of money invested in PVs. """
