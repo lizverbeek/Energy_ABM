@@ -4,7 +4,9 @@
 
 @author: Liz Verbeek
 
-TODO: write header comment
+The model class for the EnergyModel.
+This class is based on the MESA Model class and contains functions for model
+initialization, adding households, timestepping and output collection.
 
 """
 import time
@@ -35,6 +37,7 @@ class EnergyModel(Model):
             decision_making_model   : Type of household decision making theory
 
         """
+
         self.current_id = 0                         # Agent ID count
         self.schedule = BaseScheduler(self)         # Model scheduler
 
@@ -97,12 +100,13 @@ class EnergyModel(Model):
                            "PV_investment (Euros)": self.total_PV_investment
                            }
         agent_reporters = {"Income (Euros)": "income",
-                           "Energy use (KwH/Year)": "energy_use",
+                           "Energy use (kWh/year)": "energy_use",
                            "PV_installed": "PV_installed",
                            "PV_investment (Euros)": lambda hh: (hh.PV_costs
                                                                 if hh.PV_installed
                                                                 else 0),
-                           "CO2_saved (kg)": "CO2_saved"
+                           "CO2_saved (kg)": "CO2_saved",
+                           "CO2_produced (kg)": "CO2_produced"
                            }
         if self.decision_making_model == "TPB":
             agent_reporters["Attitude"] = lambda hh: hh.TPB_attributes["PV"][0]

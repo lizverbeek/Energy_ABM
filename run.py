@@ -4,7 +4,8 @@
 
 @author: Liz Verbeek
 
-TODO: write header comment
+Script to run the EnergyModel for a specified number of runs (with set
+random seeds) and save model and agent output.
 
 """
 import os
@@ -20,12 +21,13 @@ steps = 20
 runs = 100
 
 # -- MODEL PARAMETERS -- #
-n_households = 10000
+n_households = 1000
 decision_making_model = "TPB"  # "Rational" or "TPB"
 opinion_dynamics = True
 
 random_seeds = np.linspace(0, 1e3, runs, dtype="int")
 for i, random_seed in enumerate(random_seeds):
+    print("Influence rate:", influence_rate)
     print("Run num", i, "with random seed", random_seed)
     print("Number of households:", n_households)
     
@@ -43,7 +45,7 @@ for i, random_seed in enumerate(random_seeds):
     model_vars = model.datacollector.get_model_vars_dataframe()
     print(model_vars)
     agent_vars = model.datacollector.get_agent_vars_dataframe()
-    # print(agent_vars)
+    print(agent_vars)
 
     # -- STORING OUTPUT -- #
     if not os.path.isdir("results"):

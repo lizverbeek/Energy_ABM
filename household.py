@@ -4,10 +4,11 @@
 
 @author: Liz Verbeek
 
-TODO: write header comment
+This file contains a class for Household agents in the EnergyModel.
+The class is based on the MESA Agent class, and contains functions for
+initialization, decision-making (rational and behavioral) and PV installation.
 
 """
-import time
 
 import numpy as np
 
@@ -52,7 +53,7 @@ class Household(Agent):
         self.NPV = self.estimate_NPV()
 
         self.PV_installed = False
-        self.CO2_saved = 0
+        self.CO2_saved = self.CO2_produced = 0
 
         # -- SOCIAL NETWORK ATTRIBUTES -- #
         self.neighbors = []
@@ -97,6 +98,14 @@ class Household(Agent):
         # Add percentage of income to yearly savings
         self.savings += self.income * self.model.hh_savings_ratio
 
+        # Keep track of total CO2 saved
+        if self.PV_installed:
+            self.CO2_saved = self.energy_use * self.model.CO2_emission
+            self.CO2_produced = 0
+        else:
+            self.CO2_produced = self.energy_use * self.model.CO2_emission
+            self.CO2_saved = 0
+
         # Opinion dynamics: update household attitude
         if (self.model.decision_making_model == "TPB"
                 and self.model.opinion_dynamics):
@@ -124,6 +133,3 @@ class Household(Agent):
                         self.PV_installed = True
                         self.savings -= self.PV_costs
 
-        # Keep track of total CO2 saved
-        if self.PV_installed:
-            self.CO2_saved = self.energy_use * self.model.CO2_emission
