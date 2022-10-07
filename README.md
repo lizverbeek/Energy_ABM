@@ -1,4 +1,4 @@
-# Energy_ABM
+# Energy Model
 Agent-based model for household-decision making on energy saving methods, specifically: installation of PV panels.
 The purpose of the energy model is to investigate the effects of modelling informal institutions in the context of agent-based models. The energy model focuses specifically on changes in estimated greenhouse gas emissions (GHG) and investment related to PV panel installation by households in the Netherlands.
 
