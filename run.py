@@ -27,7 +27,6 @@ opinion_dynamics = True
 
 random_seeds = np.linspace(0, 1e3, runs, dtype="int")
 for i, random_seed in enumerate(random_seeds):
-    print("Influence rate:", influence_rate)
     print("Run num", i, "with random seed", random_seed)
     print("Number of households:", n_households)
     

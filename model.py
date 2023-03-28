@@ -109,7 +109,7 @@ class EnergyModel(Model):
                            "CO2_produced (kg)": "CO2_produced"
                            }
         if self.decision_making_model == "TPB":
-            agent_reporters["Attitude"] = lambda hh: hh.TPB_attributes["PV"][0]
+            agent_reporters["Attitude"] = lambda hh: hh.attitude["PV"]
         self.datacollector = DataCollector(model_reporters=model_reporters,
                                            agent_reporters=agent_reporters)
         self.datacollector.collect(self)
@@ -191,7 +191,7 @@ class EnergyModel(Model):
 
         # Get all household attitude values to enable synchronous updating
         if self.decision_making_model == "TPB":
-            self.hh_attitudes = {hh.unique_id: hh.TPB_attributes["PV"][0] for
+            self.hh_attitudes = {hh.unique_id: hh.attitude["PV"] for
                                  hh in self.schedule._agents.values()}
 
         # Model step

@@ -40,8 +40,9 @@ class Household(Agent):
             self.TPB_weights = TPB_weights
             # Initialize TPB attribute values as vector [Att, SN, PBC]
             attitude = self.model.rng_TPB.normal(0.2004, 0.4580)
-            self.TPB_attributes = {"PV": [attitude, 0, 0],
-                                   "no_PV": [-attitude, 0, 0]}
+            self.attitude = {"PV": attitude, "no_PV": -attitude}
+            self.social_norm = {"PV": 0, "no_PV": 0}
+            self.PBC = {"PV": 0, "no_PV": 0}
 
         # -- ENERGY-RELATED ATTRIBUTES -- #
         self.energy_use = self.model.rng.normal(2770, 1553)
@@ -79,17 +80,20 @@ class Household(Agent):
         """Household decision-making module: Theory of Planned Behavior. """
 
         # Update subjective norm (fraction of neighbors with PV installed)
-        self.TPB_attributes["PV"][1] = (sum(hh.PV_installed for hh in
-                                        self.neighbors)/len(self.neighbors))
-        self.TPB_attributes["no_PV"][1] = (sum(not hh.PV_installed for hh in
-                                           self.neighbors)/len(self.neighbors))
+        self.social_norm["PV"] = (sum(hh.PV_installed for hh in self.neighbors)
+                                  / len(self.neighbors))
+        self.social_norm["no_PV"] = (sum(not hh.PV_installed for hh in self.neighbors)
+                                     / len(self.neighbors))
 
         NPV = self.NPV / self.model.max_NPV
-        self.TPB_attributes["PV"][2], self.TPB_attributes["no_PV"][2] = NPV
+        self.PBC["PV"], self.PBC["no_PV"] = self.NPV / self.model.max_NPV
 
-        U_PV = np.dot(self.TPB_weights, self.TPB_attributes["PV"])
-        U_no_PV = np.dot(self.TPB_weights, self.TPB_attributes["no_PV"])
-
+        U_PV = np.dot(self.TPB_weights, [self.attitude["PV"],
+                                         self.social_norm["PV"],
+                                         self.PBC["PV"]])
+        U_no_PV = np.dot(self.TPB_weights, [self.attitude["no_PV"],
+                                            self.social_norm["no_PV"],
+                                            self.PBC["no_PV"]])
         return U_PV, U_no_PV
 
     def step(self):
@@ -113,10 +117,9 @@ class Household(Agent):
             attitudes_others = np.array([self.model.hh_attitudes[hh.unique_id]
                                          for hh in self.neighbors])
             weights = [self.influence_weights[hh] for hh in self.neighbors]
-            att_diff = np.sum(weights * (attitudes_others -
-                                         self.TPB_attributes["PV"][0]))
-            self.TPB_attributes["PV"][0] += self.model.influence_rate * att_diff
-            self.TPB_attributes["no_PV"][0] = -self.TPB_attributes["PV"][0]
+            att_diff = np.sum(weights * (attitudes_others - self.attitude["PV"]))
+            self.attitude["PV"] += self.model.influence_rate * att_diff
+            self.attitude["no_PV"] = - self.attitude["PV"]
 
         # -- HOUSEHOLD DECISION MAKING -- #
         if not self.PV_installed:
